@@ -1,0 +1,58 @@
+import React, { useState } from 'react';
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Sparkles, Loader2 } from "lucide-react";
+
+export default function SentimentInput({ onAnalyze, isAnalyzing }) {
+  const [text, setText] = useState('');
+
+  const handleAnalyze = () => {
+    if (text.trim()) {
+      onAnalyze(text);
+    }
+  };
+
+  return (
+    <Card className="shadow-lg border-2 border-indigo-100">
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Enter text to analyze
+            </label>
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type or paste any text here... Reviews, feedback, social media posts, emails, etc."
+              className="min-h-[200px] text-base resize-none border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+              disabled={isAnalyzing}
+            />
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-500">
+              {text.length} characters
+            </span>
+            <Button
+              onClick={handleAnalyze}
+              disabled={!text.trim() || isAnalyzing}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-6"
+            >
+              {isAnalyzing ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Analyze Sentiment
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
