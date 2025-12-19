@@ -1,0 +1,156 @@
+import React, { useState } from 'react';
+import { base44 } from "@/api/base44Client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { BarChart3 } from "lucide-react";
+import SentimentInput from "../components/analyzer/SentimentInput";
+import SentimentResult from "../components/analyzer/SentimentResult";
+import AnalysisHistory from "../components/analyzer/AnalysisHistory";
+import { toast } from "sonner";
+
+export default function Home() {
+  const [currentResult, setCurrentResult] = useState(null);
+  const queryClient = useQueryClient();
+
+  const { data: analyses = [], isLoading } = useQuery({
+    queryKey: ['sentimentAnalyses'],
+    queryFn: () => base44.entities.SentimentAnalysis.list('-created_date', 50),
+  });
+
+  const analyzeMutation = useMutation({
+    mutationFn: async (text) => {
+      // Call LLM to analyze sentiment
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: `Analyze the sentiment of the following text and provide a detailed breakdown.
+        
+Text: "${text}"
+
+Provide:
+1. Overall sentiment (positive, negative, neutral, or mixed)
+2. Confidence score (0-1)
+3. Positive score (0-1)
+4. Negative score (0-1)
+5. Neutral score (0-1)
+6. Key phrases that influenced the sentiment (array of strings)
+7. Detailed emotions if applicable
+
+Be accurate and nuanced in your analysis.`,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            sentiment: { 
+              type: "string",
+              enum: ["positive", "negative", "neutral", "mixed"]
+            },
+            confidence: { type: "number" },
+            positive_score: { type: "number" },
+            negative_score: { type: "number" },
+            neutral_score: { type: "number" },
+            key_phrases: {
+              type: "array",
+              items: { type: "string" }
+            },
+            emotions: {
+              type: "object",
+              properties: {
+                joy: { type: "number" },
+                sadness: { type: "number" },
+                anger: { type: "number" },
+                fear: { type: "number" }
+              }
+            }
+          },
+          required: ["sentiment", "confidence", "positive_score", "negative_score", "neutral_score"]
+        }
+      });
+
+      // Save to database
+      const saved = await base44.entities.SentimentAnalysis.create({
+        text,
+        ...result
+      });
+
+      return saved;
+    },
+    onSuccess: (data) => {
+      setCurrentResult(data);
+      queryClient.invalidateQueries({ queryKey: ['sentimentAnalyses'] });
+      toast.success('Analysis complete!');
+    },
+    onError: (error) => {
+      toast.error('Failed to analyze text. Please try again.');
+    }
+  });
+
+  const handleAnalyze = (text) => {
+    analyzeMutation.mutate(text);
+  };
+
+  const handleSelectAnalysis = (analysis) => {
+    setCurrentResult(analysis);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl shadow-lg">
+              <BarChart3 className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              Sentiment Analyzer Pro
+            </h1>
+          </div>
+          <p className="text-gray-600 text-lg">
+            Analyze the emotional tone of any text with AI-powered insights
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Analysis Area */}
+          <div className="lg:col-span-2 space-y-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <SentimentInput
+                onAnalyze={handleAnalyze}
+                isAnalyzing={analyzeMutation.isPending}
+              />
+            </motion.div>
+
+            {currentResult && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.2 }}
+              >
+                <SentimentResult result={currentResult} />
+              </motion.div>
+            )}
+          </div>
+
+          {/* History Sidebar */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.3 }}
+            className="lg:col-span-1"
+          >
+            <AnalysisHistory
+              analyses={analyses}
+              onSelect={handleSelectAnalysis}
+            />
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
